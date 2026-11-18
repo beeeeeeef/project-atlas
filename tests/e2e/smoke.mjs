@@ -45,12 +45,11 @@ const missingInsights = node('src/cli/build.mjs', [
 ok('缺 insights 时构建被拒绝', missingInsights.status !== 0);
 ok('拒绝原因说清楚了', /insights/.test(missingInsights.stderr || ''), missingInsights.stderr);
 
-// 通过 atlas run 走一遍：应当停在"缺 groups"，且中间产物不落进目标仓库
-const work = path.join(tmp, 'work');
-const runRes = node('src/cli/atlas.mjs', ['run', '--repo', repo, '--workdir', work]);
+// 通过默认路径跑一遍：应当停在"缺 groups"，产物落在仓库内的 .atlas/
+const runRes = node('src/cli/atlas.mjs', ['run', '--repo', repo]);
 ok('atlas run 停在缺 groups（exit 4）', runRes.status === 4, `status=${runRes.status}`);
-ok('中间产物落在 --workdir', fs.existsSync(path.join(work, 'graph.json')));
-ok('目标仓库没被写 graphify-out', !fs.existsSync(path.join(repo, 'graphify-out')));
+ok('中间产物落在 <repo>/.atlas/', fs.existsSync(path.join(repo, '.atlas', 'graph.json')));
+ok('不再写 graphify-out/', !fs.existsSync(path.join(repo, 'graphify-out')));
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 项失败` : '\n冒烟通过');

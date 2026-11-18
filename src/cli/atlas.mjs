@@ -74,13 +74,38 @@ if (cmd === 'verify') {
 
 // ---------- run ----------
 const TOTAL = 5;
-const out = args.out && args.out !== true ? args.out : path.join(process.cwd(), 'atlas.html');
+// 默认把产物和中间文件放回被分析的仓库（.atlas/），跟 graphify 的习惯一致；
+// 仓库不可写时退回当前目录，并明确告诉用户。
+function canWrite(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const probe = path.join(dir, '.write-probe');
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-// 中间产物统一放在 workdir（默认 <cwd>/.atlas），不写进被分析的仓库
-const workdir = args.workdir && args.workdir !== true
-  ? path.resolve(args.workdir)
-  : path.join(process.cwd(), '.atlas');
-fs.mkdirSync(workdir, { recursive: true });
+let workdir;
+let inRepo = false;
+if (args.workdir && args.workdir !== true) {
+  workdir = path.resolve(args.workdir);
+  fs.mkdirSync(workdir, { recursive: true });
+} else {
+  const repoWork = path.join(repo, '.atlas');
+  if (canWrite(repoWork)) {
+    workdir = repoWork;
+    inRepo = true;
+  } else {
+    workdir = path.join(process.cwd(), '.atlas');
+    fs.mkdirSync(workdir, { recursive: true });
+    console.log(`  ⚠ 目标仓库不可写，中间产物改放 ${workdir}`);
+  }
+}
+
+const out = args.out && args.out !== true ? args.out : path.join(workdir, 'atlas.html');
 
 const graphPath = args.graph && args.graph !== true
   ? path.resolve(args.graph)
@@ -156,6 +181,10 @@ if (args.browser && args.browser !== true) va.push('--browser', args.browser);
 if (node(CLI('verify.mjs'), va) !== 0) process.exit(6);
 
 console.log('\n\x1b[32m完成\x1b[0m  产物: ' + out);
+if (inRepo) {
+  console.log('提示: 产物和中间文件都在仓库的 .atlas/ 下；建议把下面这行加进 .gitignore（本工具不会改你的文件）：');
+  console.log('      .atlas/');
+}
 if (!args.browser) {
   console.log('渲染层仍未验证。有浏览器时执行：');
   console.log('  await page.evaluate(() => window.__archSelfTest())  → 存成 selftest.json');

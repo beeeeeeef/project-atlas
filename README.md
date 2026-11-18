@@ -79,21 +79,25 @@ node bin/atlas.mjs run \
 
 ## 产物与中间文件
 
-**不会写进被分析的仓库。** 所有中间产物都在当前目录的 `.atlas/`：
+**默认写进被分析的仓库**（跟 graphify 的习惯一致），全部收在 `.atlas/` 里：
 
 ```
-.atlas/
-├── graph.json       抽出来的代码图（复用：存在就跳过抽图）
-├── proposal.json    给 agent 的决策输入
-├── cache/           graphify 的 AST 缓存
-└── manifest.json
-架构图.html          最终产物（--out 指定，默认当前目录 atlas.html）
+your-repo/
+├── src/…
+└── .atlas/
+    ├── atlas.html      最终产物（双击即开）
+    ├── graph.json      抽出来的代码图（存在就复用，跳过抽图）
+    ├── proposal.json   给 agent 的决策输入
+    └── cache/          graphify 的 AST 缓存
 ```
+
+仓库不可写时自动退回当前目录，并给出警告。建议把 `.atlas/` 加进目标仓库的 `.gitignore`——
+**本工具不会改动你的 `.gitignore`**。
 
 | 想改什么 | 用什么 |
 |---|---|
-| 中间文件位置 | `--workdir <目录>` |
-| 产物位置 | `--out <文件>` |
+| 中间文件 + 产物位置 | `--workdir <目录>`（默认 `<repo>/.atlas`） |
+| 只改产物位置 | `--out <文件>`（默认 `<workdir>/atlas.html`） |
 | 复用已有 graph.json | `--graph <文件>` |
 
 想重新抽图就删掉 `.atlas/graph.json`。`.atlas/` 已写进 `.gitignore`。
