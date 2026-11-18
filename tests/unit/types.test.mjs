@@ -76,6 +76,12 @@ test('SQL: 建表列与外键', () => {
   assert.match(String(fk.note || ''), /外键/, '外键要标出来');
 });
 
+test('不内嵌源码：产物里不带 snippet（避免体积与转发风险）', () => {
+  const list = items(fx('go'));
+  assert.ok(list.length > 0);
+  for (const it of list) assert.equal('snippet' in it, false, `${it.name} 不该带 snippet`);
+});
+
 test('确定性：同一输入两次结果一致', () => {
   const a = JSON.stringify(extractTypes(fx('python'), empty));
   const b = JSON.stringify(extractTypes(fx('python'), empty));

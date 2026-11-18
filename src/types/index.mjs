@@ -40,7 +40,6 @@ const LANG_BY_EXT = {
 const SOURCE_EXT = new Set(Object.keys(LANG_BY_EXT));
 
 const MAX_FIELDS = 15; // 超过则截断，truncated: true
-const SNIPPET_LINES = 12; // 「见原文」兜底：前 12 行
 
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const normFile = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '');
@@ -268,16 +267,6 @@ function parenDelta(line, markers) {
     else if (ch === ')') depth -= 1;
   }
   return depth;
-}
-
-// 前 12 行原文，去掉行首缩进（“去掉缩进过多者”），去掉行尾空白
-function makeSnippet(lines, start, end, maxLines) {
-  const limit = maxLines || SNIPPET_LINES;
-  const chunk = lines.slice(start, Math.min(end + 1, start + limit));
-  return chunk
-    .map((line) => (line.trim() === '' ? '' : line.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '')))
-    .join('\n')
-    .replace(/\n+$/, '');
 }
 
 // ---------- Go struct ----------
@@ -849,13 +838,10 @@ function buildUsages(graph, rawItems) {
  * @param {object} graph    graph.json 已 parse 的对象（用于 usages）
  * @param {object} [opts]
  * @param {number} [opts.maxFields]    单个类型保留的最大字段数，默认 15
- * @param {number} [opts.snippetLines] 单个类型 snippet 的最大行数，默认 12
  * @returns {{groups: Array, links: Array, usages: Array}}
  */
 export function extractTypes(repoRoot, graph, opts = {}) {
   const maxFields = Number.isInteger(opts.maxFields) && opts.maxFields > 0 ? opts.maxFields : MAX_FIELDS;
-  const snippetLines =
-    Number.isInteger(opts.snippetLines) && opts.snippetLines > 0 ? opts.snippetLines : SNIPPET_LINES;
   const root = path.resolve(String(repoRoot || '.'));
 
   const grouping = resolveGrouping(root);
@@ -882,7 +868,6 @@ export function extractTypes(repoRoot, graph, opts = {}) {
       else if (lang === 'rust') decls = parseRustTypes(source);
       else if (lang === 'sql') decls = parseSqlTables(source);
       else continue;
-      const lines = source.split(/\r?\n/);
       for (const decl of decls) {
         if (!decl.name) continue;
         const fields = decl.fields.map((f) => ({
@@ -901,7 +886,6 @@ export function extractTypes(repoRoot, graph, opts = {}) {
           kind: decl.kind,
           fields: truncated ? fields.slice(0, maxFields) : fields,
           truncated,
-          snippet: makeSnippet(lines, decl.start, decl.end, snippetLines),
         };
         rawItems.push({ group, item });
       }
