@@ -1,0 +1,10 @@
+node_modules/
+.atlas/
+proposal.json
+model.json
+*.log
+*-atlas.html
+*-架构图.html
+dist/
+.DS_Store
+Thumbs.db

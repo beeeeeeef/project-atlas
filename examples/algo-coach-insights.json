@@ -1,0 +1,293 @@
+{
+  "layers": {
+    "extension": {
+      "role": "产品的真正入口：用户在 LeetCode 页面写题，插件把题目和代码带上去问教练。",
+      "insight": {
+        "why": "选择做浏览器插件而不是做一个新网站，是因为用户写题时根本不会离开 LeetCode；插件是唯一能在正确时刻出现在正确位置的形态。"
+      }
+    },
+    "web": {
+      "role": "规划中的管理面板，目前只有骨架。",
+      "insight": {
+        "risk": "现在 App.tsx + store.ts 只够演示对话草稿，登录、AI 配置、历史都还没接后端，别把这一层的完成度当成产品完成度。"
+      }
+    },
+    "api": {
+      "role": "两个业务端口 + 一个调试口：/api/chat（插件主路径）、/api/analyze（早期单轮分析）、/api/analyze/mock。",
+      "insight": {
+        "why": "main.go 里把依赖手工装配（repo → service → handler），没有上 DI 框架。文件才 80 行，读它就能知道整个后端怎么拼起来的。"
+      }
+    },
+    "biz": {
+      "role": "教练感的来源：prompt 怎么写、历史怎么截断、模型返回怎么解析成结构化提示。",
+      "insight": {
+        "risk": "两条业务线并存：chat（多轮、有会话）和 analyze（单轮、无状态）。新增功能前先确认该往哪条线上加，否则会分裂成两套。"
+      }
+    },
+    "data": {
+      "role": "四张表：users / verify_codes / conversations / messages。",
+      "insight": {
+        "why": "repository 分两层：接口在 user_repository.go，SQL 实现在 user_SQL.go。换数据库只动 SQL 文件。"
+      }
+    },
+    "infra": {
+      "role": "AI 客户端抽象与横切工具。",
+      "insight": {
+        "why": "ai.Client 是接口而不是具体类型，因此换 OpenAI/Claude 只需要加一个实现，业务层不动。"
+      }
+    }
+  },
+  "files": {
+    "backend/cmd/server/main.go": {
+      "summary": "进程入口：加载 .env → 连 PostgreSQL → 建 DeepSeek 客户端 → 装配 chat/analyze → 注册 3 条路由 → 监听 8080。",
+      "insight": {
+        "role": "想搞清楚「谁依赖谁」，读这一个文件就够了，它是整个后端的装配图。",
+        "risk": "CORS 写死 Allow-Origin: *，上线前必须收紧；DEEPSEEK_API_KEY 缺失直接 log.Fatal，属于启动即失败。"
+      }
+    },
+    "backend/internal/chat/service.go": {
+      "summary": "多轮对话核心：无 conversationId 就新建会话并把题目卡写进 system 消息；有则续聊，中途代码变更会更新会话里的 code。",
+      "insight": {
+        "why": "把题目塞进 system 消息而不是每轮重复拼，是为了让后续续聊能还原上下文，也省 token。",
+        "risk": "maxHistoryMessages = 20，超出直接截断；长对话会丢掉早期约定，是体验上的隐性上限。"
+      }
+    },
+    "backend/internal/chat/prompt.go": {
+      "summary": "教练人设 prompt（苏格拉底式提问、禁止直接贴完整题解）+ 题目卡构建 + 把模型输出拆成「自然语言 + 末尾 JSON」。",
+      "insight": {
+        "why": "要求模型先给自然语言、再追加 JSON 代码块，是为了同时满足「聊天气泡要能读」和「前端要高亮 hints/issues」两个需求。",
+        "risk": "依赖模型老实遵守格式；SplitAssistantOutput 解析失败时必须能降级成纯文本，否则整轮回复会变空。"
+      }
+    },
+    "backend/internal/analyze/service.go": {
+      "summary": "早期单轮分析：构建教练 prompt → 调 AI → 清洗 markdown 代码块 → 解析 JSON。",
+      "insight": {
+        "role": "chat 线成型之前的主路径，现在标注为「保留调试」。",
+        "risk": "与 chat 的 prompt 有重叠；如果继续维护两条线，prompt 会逐渐漂移。"
+      }
+    },
+    "backend/internal/ai/client.go": {
+      "summary": "定义 Message / ChatConfig / Client 接口，把「哪家模型」隔离在一个方法后面。",
+      "insight": {
+        "why": "业务层只依赖 Client 接口，所以换模型厂商不需要改 service。"
+      }
+    },
+    "backend/internal/chat/repository.go": {
+      "summary": "会话与消息的 SQL：建会话、加消息、取会话、列消息、touch 更新时间、scanConversation 行映射。",
+      "insight": {
+        "role": "整个多轮对话的持久化都在这里，service 层不碰 SQL。"
+      }
+    },
+    "backend/service/users/login.go": {
+      "summary": "两条登录路径：邮箱+验证码（LoginByCode）和邮箱+密码（LoginByPassword），验证码带发送冷却与尝试次数上限。",
+      "insight": {
+        "risk": "验证码相关的防刷逻辑（冷却、尝试次数、MarkUsed）散在 repository 和 service 两处，改动时要一起看。"
+      }
+    },
+    "extension/src/content/leetcode-cn.ts": {
+      "summary": "注入到 leetcode.cn 题目页的 content script：判断是不是题目页、抓标题/描述、抓当前代码、识别语言，响应 popup 的 EXTRACT_PROBLEM 消息。",
+      "insight": {
+        "risk": "全靠 DOM 选择器抓取，LeetCode 改版就会静默失败——这是整个产品最脆的一环。",
+        "why": "抓取逻辑放 content script 而不是 popup，是因为只有 content script 能读到页面 DOM。"
+      }
+    },
+    "extension/src/popup/Popup.tsx": {
+      "summary": "聊天界面：消息列表、输入框、发送时带上从 content script 取到的题目上下文。",
+      "insight": {
+        "role": "用户唯一看见的界面。"
+      }
+    },
+    "extension/src/shared/api.ts": {
+      "summary": "三端共用的类型契约：ProblemContext / ChatRequest / ChatResponse。",
+      "insight": {
+        "why": "前后端共享一份 TS 类型，是这个小项目里最划算的工程决策——后端改字段时前端会直接编译报错。"
+      }
+    },
+    "backend/internal/chat/handler.go": {
+      "summary": "把 HTTP 请求解成 ChatRequest，调 service，再把结果包成统一响应。",
+      "insight": {
+        "role": "这一层只做协议转换，看到这里就该知道业务在 service.go。"
+      }
+    }
+  },
+  "functions": {
+    "backend/internal/chat/service.go::Service.Chat()": {
+      "role": "整个产品的核心函数：决定新建还是续聊、写题目卡、截断历史、调模型、落库、返回。",
+      "insight": {
+        "why": "它是全图度数最高的节点，几乎所有业务都汇到这里；改对话行为从它读起。",
+        "risk": "一个函数里揉了会话生命周期、上下文构建和 AI 调用三件事，是后面最该拆的地方。"
+      }
+    },
+    "backend/internal/chat/prompt.go::BuildProblemCard()": {
+      "role": "把题目上下文拼成结构化 Markdown 卡，写进 system 消息。",
+      "insight": {
+        "why": "题目卡是「会话可恢复」的关键：没有它，续聊时模型不知道学生在做哪道题。"
+      }
+    },
+    "backend/internal/chat/prompt.go::SplitAssistantOutput()": {
+      "role": "把模型回复拆成「自然语言部分」和「末尾 JSON 块」两段。",
+      "insight": {
+        "risk": "完全依赖模型遵守格式；JSON 块缺失或写坏时必须降级成纯文本，否则用户看不到回复。"
+      }
+    },
+    "backend/internal/analyze/service.go::AnalyzeService.AnalyzeCode()": {
+      "role": "单轮分析：拼 messages → 调 aiClient.Chat → 清洗 → 解析成结构化结果。",
+      "insight": {
+        "role": "与 chat 的 Chat() 是同一件事的旧版本，读的时候对比着看能看出产品从「分析一次」演进到「多轮对话」。"
+      }
+    },
+    "backend/internal/ai/deepseek_client.go::DeepSeekClient.Chat()": {
+      "role": "真正发 HTTP 到 DeepSeek 的地方，把 Message 转成 OpenAI 兼容格式。",
+      "insight": {
+        "why": "只在这一层出现厂商相关的协议细节，上层完全不知道用的是哪家。"
+      }
+    },
+    "extension/src/content/leetcode-cn.ts::extractProblem()": {
+      "role": "抓取入口：拿标题、URL、描述，失败时返回 ok:false 和原因。",
+      "insight": {
+        "risk": "DOM 选择器一改版就失效，而且失败是静默的——用户只会看到「抓取失败」。"
+      }
+    },
+    "extension/src/content/leetcode-cn.ts::extractCode()": {
+      "role": "从编辑器里读出用户当前写的代码和语言。",
+      "insight": {
+        "why": "LeetCode 用 CodeMirror/Monaco，代码不在 textarea 里，所以得按编辑器结构取。"
+      }
+    },
+    "backend/internal/chat/repository.go::Repository.CreateConversation()": {
+      "role": "插入 conversations 行并返回带 ID 的会话对象。",
+      "insight": {
+        "role": "会话生命周期的起点。"
+      }
+    },
+    "backend/internal/chat/service.go::buildAIMessages()": "把题目卡与历史消息拼成发给模型的消息数组，按最近 20 条截断。",
+    "backend/internal/chat/service.go::NewService()": "构造函数：注入 repository 与 ai.Client，业务层只依赖接口。",
+    "backend/internal/chat/service.go::toPublicMessages()": "把库里的消息行转成返回给前端的精简结构，丢掉内部字段。",
+    "backend/internal/chat/repository.go::Repository.AddMessage()": "往 messages 表插一条消息并返回新行。",
+    "backend/internal/analyze/service.go::cleanMarkdownJSON()": "剥掉模型输出里的 ```json 代码围栏，得到可直接解析的 JSON。",
+    "backend/internal/analyze/service.go::NewAnalyzeService()": "构造函数：注入 ai.Client，单轮分析不碰数据库。",
+    "backend/internal/analyze/service.go::trimSpace()": "去掉字符串首尾空白的安全封装。",
+    "backend/service/users/login.go::UserService.LoginByPassword()": "邮箱+密码登录：查用户、校验哈希、签发 JWT。",
+    "backend/service/users/login.go::UserService.SendLoginCode()": "生成登录验证码并落库，带发送冷却。",
+    "backend/service/users/login.go::UserService.LoginByCode()": "邮箱+验证码登录：校验码、标记已用、签发 JWT。",
+    "backend/service/users/register.go::UserService.Register()": "校验验证码后创建用户，密码先哈希再入库。",
+    "backend/service/users/register.go::UserService.SendRegisterCode()": "生成注册验证码并落库，限制重复发送。",
+    "backend/internal/analyze/prompt.go::BuildCoachPrompt()": "拼出单轮分析用的教练 prompt（题目 + 代码 + 输出格式要求）。",
+    "backend/internal/analyze/prompt.go::ParseCoachResponse()": "把模型返回解析成结构化分析结果，失败时降级。",
+    "backend/service/users/service.go::NewUserService()": "构造函数：把用户与验证码两个 repository 注入进来。",
+    "backend/internal/chat/repository.go::Repository.GetConversation()": "按 id 取会话，取不到返回明确错误。",
+    "backend/internal/chat/repository.go::scanConversation()": "把一行 SQL 结果映射成会话对象。",
+    "backend/internal/chat/repository.go::Repository.ListMessages()": "按会话取消息列表，用于续聊时还原上下文。",
+    "backend/internal/chat/repository.go::Repository.TouchConversation()": "更新会话的 updated_at，让列表按活跃度排序。",
+    "backend/internal/chat/repository.go::Repository.UpdateCode()": "把用户中途修改的代码写回会话，避免下次续聊丢代码。",
+    "backend/internal/chat/repository.go::NewRepository()": "构造函数：持有 *sql.DB。",
+    "backend/internal/chat/repository.go::nullableJSON()": "把可选 JSON 字段转成 SQL NULL，避免写入空对象。",
+    "backend/internal/db/postgres.go::OpenPostgres()": "连接 PostgreSQL 并 ping 一次，失败即返回错误。",
+    "backend/repository/user_SQL.go::UserRepositorySQL.Create()": "插入 users 行，返回自增 id。",
+    "backend/repository/user_SQL.go::UserRepositorySQL.GetByEmail()": "按邮箱查用户，登录与注册查重都用它。",
+    "backend/repository/user_SQL.go::UserRepositorySQL.GetByID()": "按主键查用户，用于鉴权后取用户信息。",
+    "backend/repository/user_SQL.go::NewUserRepositorySQL()": "构造函数：持有 *sql.DB。",
+    "backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.Create()": "插入一条验证码记录。",
+    "backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.GetLatestByEmailAndType()": "取该邮箱该类型最新一条验证码，用于登录/注册校验。",
+    "backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.IncrementApplyTimes()": "记录验证码被尝试的次数，用于防爆破。",
+    "backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.MarkUsed()": "把验证码标记为已使用，防重复消费。",
+    "backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.RefreshCode()": "重置验证码内容与过期时间（重新发送时用）。",
+    "backend/repository/verify_code_SQL.go::NewVerifyCodeRepositorySQL()": "构造函数：持有 *sql.DB。",
+    "extension/src/content/leetcode-cn.ts::extractLanguage()": "从页面编辑器推断当前编程语言。",
+    "extension/src/content/leetcode-cn.ts::isLeetCodeProblemPage()": "判断当前 URL 是不是题目页，决定要不要注入抓取逻辑。",
+    "extension/src/content/leetcode-cn.ts::queryDescription()": "从 DOM 里取题目描述文本。",
+    "extension/src/popup/Popup.tsx::Popup()": "聊天主界面：消息列表 + 输入框 + 发送时带上题目上下文。",
+    "extension/src/popup/Popup.tsx::Spinner()": "加载中的小转圈组件。",
+    "extension/src/shared/api.ts::chat()": "前端调 /api/chat 的唯一封装，统一处理响应与错误。",
+    "backend/cmd/server/main.go::main()": "进程入口：读 .env → 连库 → 建 AI 客户端 → 装配 handler → 注册路由 → 监听 8080。",
+    "backend/internal/analyze/handler.go::NewHandler()": "构造函数：注入 AnalyzeService。",
+    "backend/internal/analyze/handler.go::Handler.HandleAnalyze()": "解析单轮分析请求 → 调 service → 包成统一响应。",
+    "backend/internal/analyze/handler.go::HandleAnalyzeMock()": "不调模型的假响应，用于前端联调与压测。",
+    "backend/internal/chat/handler.go::NewHandler()": "构造函数：注入 chat Service。",
+    "backend/internal/chat/handler.go::Handler.HandleChat()": "解析 /api/chat 请求 → 调 Service.Chat → 包成统一响应。",
+    "backend/utils/code.go::GenerateCode()": "生成邮箱验证码数字串。",
+    "backend/utils/password.go::CheckPasswordHash()": "用 bcrypt 校验明文密码与哈希是否匹配。",
+    "backend/utils/password.go::HashPassword()": "用 bcrypt 生成密码哈希，注册时调用。",
+    "backend/internal/ai/deepseek_client.go::NewDeepSeekClient()": "构造函数：持有 API key，其余配置延迟到调用时再取。",
+    "backend/utils/jwt.go::base64UrlDecode()": "JWT 段用的 base64url 解码（去填充）。",
+    "backend/utils/jwt.go::base64UrlEncode()": "JWT 段用的 base64url 编码（去填充）。",
+    "frontend/src/App.tsx::App()": "Web 面板根组件，目前只有一个对话草稿的演示界面。"
+  },
+  "flows": [
+    {
+      "id": "fl_ask",
+      "title": "在 LeetCode 页面里问教练一次",
+      "steps": [
+        {
+          "view": "v_file_extension_src_content_leetcode_cn_ts",
+          "node": "fn:extension/src/content/leetcode-cn.ts::extractProblem()",
+          "note": "content script 抓题目与代码"
+        },
+        {
+          "view": "v_file_extension_src_popup_Popup_tsx",
+          "node": "fn:extension/src/popup/Popup.tsx::Popup()",
+          "note": "popup 拿到上下文，用户发消息"
+        },
+        {
+          "view": "v_grp_api",
+          "node": "file:backend/internal/chat/handler.go",
+          "note": "POST /api/chat 进入接入层"
+        },
+        {
+          "view": "v_file_backend_internal_chat_service_go",
+          "node": "fn:backend/internal/chat/service.go::Service.Chat()",
+          "note": "核心：建/取会话、截历史、调模型"
+        },
+        {
+          "view": "v_grp_infra",
+          "node": "file:backend/internal/ai/deepseek_client.go",
+          "note": "调 DeepSeek，拿回自然语言 + JSON"
+        },
+        {
+          "view": "v_grp_data",
+          "node": "file:backend/internal/chat/repository.go",
+          "note": "消息落库，会话 touch"
+        }
+      ]
+    },
+    {
+      "id": "fl_signup",
+      "title": "注册：邮箱验证码 → 建号",
+      "steps": [
+        {
+          "view": "v_file_backend_service_users_register_go",
+          "node": "fn:backend/service/users/register.go::UserService.SendRegisterCode()",
+          "note": "发码，写 verify_codes"
+        },
+        {
+          "view": "v_file_backend_repository_verify_code_SQL_go",
+          "node": "fn:backend/repository/verify_code_SQL.go::VerifyCodeRepositorySQL.GetLatestByEmailAndType()",
+          "note": "取最新一条验证码并校验"
+        },
+        {
+          "view": "v_file_backend_service_users_register_go",
+          "node": "fn:backend/service/users/register.go::UserService.Register()",
+          "note": "校验通过后建用户"
+        },
+        {
+          "view": "v_file_backend_repository_user_SQL_go",
+          "node": "fn:backend/repository/user_SQL.go::UserRepositorySQL.Create()",
+          "note": "写入 users 表"
+        }
+      ]
+    }
+  ],
+  "intro": {
+    "paragraphs": [
+      "Algo-coach 是给刷 LeetCode 的人做的实时 AI 教练。它没有做成一个新网站，而是做成 Chrome 插件——因为人在做题时不会离开题目页，插件是唯一能在正确时机出现在正确位置的形态：它抓取当前题目和用户已写的代码，直接带进对话。",
+      "系统分成三端。浏览器插件负责抓题、渲染聊天界面、保存登录态；Go 后端承接请求，按「路由 → 业务 → 数据」三层组织，业务层负责拼 prompt、管多轮上下文，数据层落库；PostgreSQL 存用户、验证码、会话和消息。模型厂商被隔离在 ai.Client 接口后面，换 OpenAI 或 Claude 不需要动业务代码。",
+      "它的设计取向是「教练」而不是「答案机」。prompt 里明确要求苏格拉底式提问、禁止直接给出完整 AC 代码；多轮上下文靠把题目卡写进第一条 system 消息来还原，所以续聊时模型仍然知道学生在做哪道题。这个取舍决定了它的核心价值，也决定了核心风险——它依赖模型老实遵守格式。"
+    ],
+    "basis": [
+      "docs/architecture.md",
+      "backend/internal/chat/prompt.go",
+      "backend/cmd/server/main.go",
+      "extension/src/content/leetcode-cn.ts"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-atlas.dev/schemas/groups.schema.json",
+  "title": "groups.json",
+  "description": "分层输入：哪些文件属于哪一层、层叫什么、一句话职责。由 agent 根据 proposal.json 编写。",
+  "type": "object",
+  "required": ["layers"],
+  "additionalProperties": false,
+  "properties": {
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["key", "name", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$", "description": "层的稳定 id" },
+          "name": { "type": "string", "minLength": 1, "description": "显示名，如「后端业务层」" },
+          "role": { "type": "string", "minLength": 2, "description": "一句话职责，会显示在卡片上" },
+          "match": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "glob 列表；* 不跨目录，** 跨目录。先声明先认领"
+          },
+          "kind": { "type": "string", "enum": ["layer", "data"], "default": "layer" }
+        }
+      }
+    },
+    "skip": { "type": "array", "items": { "type": "string" } },
+    "depth": { "type": "integer", "minimum": 1, "maximum": 4 },
+    "grouping": { "type": "string", "enum": ["auto", "dirs", "clusters"] }
+  }
+}

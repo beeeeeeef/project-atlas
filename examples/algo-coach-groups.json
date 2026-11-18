@@ -1,0 +1,64 @@
+{
+  "layers": [
+    {
+      "key": "extension",
+      "name": "浏览器插件",
+      "match": ["extension/**"],
+      "role": "Chrome 扩展：content script 在 leetcode.cn 题目页抓题目与当前代码，popup 是聊天界面，background 管登录态与 API 调用。产品的主入口。"
+    },
+    {
+      "key": "web",
+      "name": "Web 前端",
+      "match": ["frontend/**"],
+      "role": "React + Vite 管理面板。规划中是登录、AI 配置、对话历史、使用统计；目前只有骨架和一个对话草稿 store。"
+    },
+    {
+      "key": "api",
+      "name": "后端接入层",
+      "match": [
+        "backend/cmd/**",
+        "backend/middleware/**",
+        "backend/handler/**",
+        "backend/internal/**/handler.go"
+      ],
+      "role": "Gin 路由装配 + CORS + JWT 中间件 + 请求 DTO 解码。只做协议转换，不含业务判断。"
+    },
+    {
+      "key": "biz",
+      "name": "后端业务层",
+      "match": [
+        "backend/internal/chat/service.go",
+        "backend/internal/chat/prompt.go",
+        "backend/internal/chat/dto.go",
+        "backend/internal/analyze/service.go",
+        "backend/internal/analyze/prompt.go",
+        "backend/internal/analyze/dto.go",
+        "backend/service/**"
+      ],
+      "role": "教练式 prompt 构建、多轮上下文装配（只带最近 20 条）、注册登录验证码流程。整个产品「像不像一个教练」由这里的 prompt 决定。"
+    },
+    {
+      "key": "data",
+      "name": "后端数据层",
+      "match": [
+        "backend/repository/**",
+        "backend/model/**",
+        "backend/internal/db/**",
+        "backend/internal/chat/repository.go"
+      ],
+      "role": "PostgreSQL 访问：users / verify_codes / conversations / messages 四张表的读写，会话与消息的持久化。"
+    },
+    {
+      "key": "infra",
+      "name": "AI 与基础设施",
+      "match": [
+        "backend/internal/ai/**",
+        "backend/internal/config/**",
+        "backend/internal/response/**",
+        "backend/utils/**"
+      ],
+      "role": "大模型客户端抽象（Client 接口 + DeepSeek 实现）、配置加载、统一响应体、JWT / 密码哈希 / 验证码工具。"
+    }
+  ],
+  "skip": ["docs", "graphify-out", "dist", "node_modules"]
+}

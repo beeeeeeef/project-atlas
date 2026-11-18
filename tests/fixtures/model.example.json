@@ -1,0 +1,99 @@
+{
+  "meta": {
+    "project": "httpx (fixture)",
+    "generatedAt": "2026-11-07T21:00:00+08:00",
+    "extractor": { "name": "graphify", "version": "0.9.103", "mode": "code-only" },
+    "warnings": ["这是开发用夹具，不是真实产出"]
+  },
+  "stats": { "nodes": 20, "edges": 19, "files": 4, "functions": 9, "extracted": 17, "inferred": 2 },
+  "rootView": "v_root",
+  "views": {
+    "v_root": {
+      "id": "v_root",
+      "level": 1,
+      "kind": "layers",
+      "title": "系统分层",
+      "breadcrumb": [],
+      "note": "按职责划分的五个子系统。线表示依赖方向，数字是本层与对层的调用条数。",
+      "nodes": [
+        { "id": "n_caller", "label": "调用者", "kind": "external", "sub": "应用代码 / 测试", "x": 80, "y": 20, "w": 180, "h": 60 },
+        { "id": "n_auth", "label": "认证", "kind": "layer", "sub": "2 文件 · 9 函数", "x": 80, "y": 120, "w": 180, "h": 60, "summary": "_auth.py：Basic/Digest/NetRC 与自定义 Auth 基类。" },
+        { "id": "n_api", "label": "API 层", "kind": "layer", "sub": "3 文件 · 41 函数", "x": 80, "y": 220, "w": 180, "h": 60, "drill": "v_api", "summary": "_api.py：模块级快捷函数（get/post/...），每次调用创建一个临时 Client。" },
+        { "id": "n_client", "label": "客户端核心", "kind": "layer", "sub": "4 文件 · 88 函数", "x": 80, "y": 320, "w": 180, "h": 60, "summary": "_client.py：Client/AsyncClient，请求拼装、重定向、cookie 与连接池生命周期。" },
+        { "id": "n_transport", "label": "传输层", "kind": "layer", "sub": "6 文件 · 37 函数", "x": 80, "y": 420, "w": 180, "h": 60, "summary": "_transports/：HTTPTransport、连接池、超时与代理。" },
+        { "id": "n_models", "label": "数据模型", "kind": "layer", "sub": "5 文件 · 63 函数", "x": 380, "y": 320, "w": 180, "h": 60, "summary": "_models.py：Request / Response / Headers / URL / Cookies。" },
+        { "id": "n_utils", "label": "工具", "kind": "layer", "sub": "4 文件 · 22 函数", "x": 380, "y": 420, "w": 180, "h": 60, "summary": "_utils.py：编码、URL 解析、header 大小写归一。" }
+      ],
+      "edges": [
+        { "from": "n_caller", "to": "n_api", "kind": "calls", "label": "入口", "weight": 9, "confidence": "EXTRACTED" },
+        { "from": "n_auth", "to": "n_client", "kind": "uses", "label": "6", "weight": 6, "confidence": "EXTRACTED" },
+        { "from": "n_api", "to": "n_client", "kind": "calls", "label": "38", "weight": 38, "confidence": "EXTRACTED" },
+        { "from": "n_client", "to": "n_transport", "kind": "calls", "label": "17", "weight": 17, "confidence": "EXTRACTED" },
+        { "from": "n_client", "to": "n_models", "kind": "uses", "label": "44", "weight": 44, "confidence": "EXTRACTED" },
+        { "from": "n_client", "to": "n_utils", "kind": "uses", "label": "12", "weight": 12, "confidence": "INFERRED" },
+        { "from": "n_transport", "to": "n_models", "kind": "uses", "label": "9", "weight": 9, "confidence": "EXTRACTED" },
+        { "from": "n_auth", "to": "n_utils", "kind": "uses", "label": "4", "weight": 4, "confidence": "EXTRACTED" }
+      ]
+    },
+    "v_api": {
+      "id": "v_api",
+      "level": 2,
+      "kind": "files",
+      "title": "API 层 · 文件",
+      "breadcrumb": ["v_root", "n_api"],
+      "note": "本层是 API 层的文件组成。点 _api.py 可继续下钻到函数。",
+      "nodes": [
+        { "id": "fn_api", "label": "_api.py", "kind": "file", "sub": "9 函数 · 412 行", "x": 80, "y": 20, "w": 180, "h": 60, "drill": "v_file_api", "xref": "httpx/_api.py:1", "summary": "模块级快捷函数，薄封装，把参数透传给一次性 Client。" },
+        { "id": "fn_models", "label": "_models.py", "kind": "file", "sub": "63 函数 · 1080 行", "x": 80, "y": 120, "w": 180, "h": 60, "xref": "httpx/_models.py:1", "summary": "请求/响应对象。" },
+        { "id": "fn_client", "label": "_client.py", "kind": "file", "sub": "88 函数 · 1600 行", "x": 80, "y": 220, "w": 180, "h": 60, "xref": "httpx/_client.py:1", "summary": "Client 与 AsyncClient。" },
+        { "id": "fn_transport", "label": "_transports/base.py", "kind": "file", "sub": "12 函数 · 180 行", "x": 80, "y": 320, "w": 180, "h": 60, "xref": "httpx/_transports/base.py:1", "summary": "传输抽象基类。" }
+      ],
+      "edges": [
+        { "from": "fn_api", "to": "fn_client", "kind": "calls", "label": "9", "weight": 9, "confidence": "EXTRACTED" },
+        { "from": "fn_api", "to": "fn_models", "kind": "imports", "label": "import", "weight": 3, "confidence": "EXTRACTED" },
+        { "from": "fn_client", "to": "fn_transport", "kind": "uses", "label": "17", "weight": 17, "confidence": "EXTRACTED" }
+      ]
+    },
+    "v_file_api": {
+      "id": "v_file_api",
+      "level": 3,
+      "kind": "functions",
+      "title": "_api.py · 函数",
+      "breadcrumb": ["v_root", "n_api", "fn_api"],
+      "note": "9 个函数，全部薄转发到 request()。线是静态解析出的调用边。",
+      "nodes": [
+        { "id": "f_get", "label": "get()", "kind": "function", "sub": "L24", "x": 60, "y": 40, "w": 170, "h": 56, "xref": "httpx/_api.py:24", "summary": "发起 GET，内部直接调 request('GET', ...)。" },
+        { "id": "f_request", "label": "request()", "kind": "function", "sub": "L39", "x": 300, "y": 40, "w": 170, "h": 56, "xref": "httpx/_api.py:39", "summary": "唯一真正干活的地方：建 Client、调用 client.request、返回 Response。" },
+        { "id": "f_stream", "label": "stream()", "kind": "function", "sub": "L212", "x": 540, "y": 40, "w": 170, "h": 56, "xref": "httpx/_api.py:212", "summary": "流式请求，返回上下文管理器。" },
+        { "id": "f_delete", "label": "delete()", "kind": "function", "sub": "L96", "x": 60, "y": 160, "w": 170, "h": 56, "xref": "httpx/_api.py:96" },
+        { "id": "f_head", "label": "head()", "kind": "function", "sub": "L120", "x": 300, "y": 160, "w": 170, "h": 56, "xref": "httpx/_api.py:120" },
+        { "id": "f_options", "label": "options()", "kind": "function", "sub": "L144", "x": 540, "y": 160, "w": 170, "h": 56, "xref": "httpx/_api.py:144" },
+        { "id": "f_patch", "label": "patch()", "kind": "function", "sub": "L168", "x": 60, "y": 280, "w": 170, "h": 56, "xref": "httpx/_api.py:168" },
+        { "id": "f_post", "label": "post()", "kind": "function", "sub": "L192", "x": 300, "y": 280, "w": 170, "h": 56, "xref": "httpx/_api.py:192" },
+        { "id": "f_put", "label": "put()", "kind": "function", "sub": "L236", "x": 540, "y": 280, "w": 170, "h": 56, "xref": "httpx/_api.py:236" }
+      ],
+      "edges": [
+        { "from": "f_get", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_delete", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_head", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_options", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_patch", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_post", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_put", "to": "f_request", "kind": "calls", "confidence": "EXTRACTED" },
+        { "from": "f_stream", "to": "f_request", "kind": "calls", "confidence": "INFERRED" }
+      ]
+    }
+  },
+  "flows": [
+    {
+      "id": "fl_get",
+      "title": "一次 httpx.get() 的完整路径",
+      "steps": [
+        { "view": "v_file_api", "node": "f_get", "note": "用户入口，薄封装" },
+        { "view": "v_file_api", "node": "f_request", "note": "建临时 Client 并调用" },
+        { "view": "v_api", "node": "fn_client", "note": "进入 Client.request 主循环" },
+        { "view": "v_root", "node": "n_transport", "note": "最终由 Transport 发出" }
+      ]
+    }
+  ]
+}

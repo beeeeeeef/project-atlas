@@ -1,0 +1,47 @@
+{
+  "name": "project-atlas",
+  "version": "0.1.0",
+  "description": "Turn any codebase into one offline HTML page: overview, architecture, flows and data contracts. Built for agents, read by humans.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "project-atlas": "bin/atlas.mjs",
+    "atlas": "bin/atlas.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "assets",
+    "schemas",
+    "examples",
+    "docs",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "doctor": "node src/cli/atlas.mjs doctor",
+    "smoke": "node tests/e2e/smoke.mjs"
+  },
+  "keywords": [
+    "architecture",
+    "codebase-visualization",
+    "agent-skill",
+    "code-graph",
+    "onboarding",
+    "static-analysis",
+    "call-graph"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/USER/project-atlas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/USER/project-atlas/issues"
+  },
+  "homepage": "https://github.com/USER/project-atlas#readme"
+}

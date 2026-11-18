@@ -1,0 +1,96 @@
+{
+  "layers": {
+    "entry": "用户写 httpx.get(...) 时真正落到的代码。故意做得极薄，保证「模块级快捷用法」和「Client 长期复用」两种用法共用同一条执行路径。",
+    "client": "整个库最难的一块：重定向、认证、重试、连接复用都在这里交织。改动风险最高。",
+    "model": "纯数据 + 纯函数，好测也好改。Response 的懒加载（不读完 body 就不解码）是这里的性能关键。",
+    "transport": "换传输实现只需换这一层，上层无感知。ASGI/WSGI 让它在服务端框架里能直接当测试客户端用。"
+  },
+  "files": {
+    "httpx/_api.py": {
+      "summary": "9 个模块级函数，每个都只有 3–10 行：组装参数 → with Client() as client → 调 client.request()。",
+      "insight": {
+        "why": "每次调用新建 Client 会新建连接池。高频调用时这是性能陷阱，官方文档也是让人改用 Client。"
+      }
+    },
+    "httpx/_client.py": {
+      "summary": "Client / AsyncClient 两个大类，各 ~800 行。核心是 request() 的四段处理：build_request → send → 读响应 → 收尾。",
+      "insight": {
+        "risk": "同步/异步两套几乎逐行镜像，改一处必须同步改另一处，是历史上最容易漏改的文件。"
+      }
+    },
+    "httpx/_models.py": {
+      "summary": "Request 与 Response。Response 持有一条字节流，.text / .json / .read() 都会触发按需解码。",
+      "insight": {
+        "why": "流式响应的 body 只能读一次；重复读会抛 StreamConsumed。这是 API 设计上的硬约束，不是 bug。"
+      }
+    },
+    "httpx/_transports/default.py": {
+      "summary": "默认传输：把 httpx 的 Request 翻译成 httpcore 的请求，再翻回 Response。真正的 socket IO 在 httpcore。",
+      "insight": {
+        "role": "httpx 与 httpcore 的唯一边界层。想知道「网络在哪发生」，看到这个文件为止。"
+      }
+    },
+    "httpx/_auth.py": {
+      "summary": "Auth 基类 + Basic/Digest/NetRC/自定义函数认证。只在 _send_handling_auth 里被调用。",
+      "insight": {
+        "why": "认证不是一个 transport 装饰器，而是请求生命周期里的一步，所以 401 重试和重定向能正确交互。"
+      }
+    }
+  },
+  "functions": {
+    "httpx/_api.py::get()": {
+      "role": "九行薄封装：new Client → client.get(url) → 返回 Response。",
+      "insight": {
+        "why": "因为要支持 with 语义和连接池，这里用了 with Client(...)，用完即关。"
+      }
+    },
+    "httpx/_client.py::Client.request()": {
+      "role": "公开 API 的主入口：把 URL/参数/headers 组装成 Request，然后交给 send()。",
+      "insight": {
+        "role": "它自己不发请求，只负责「把用户的松散参数变成一个规整的 Request」。"
+      }
+    },
+    "httpx/_client.py::Client.send()": {
+      "role": "发送 Request 并返回 Response：状态检查 → 认证 → 重定向 → 真正发出去。",
+      "insight": {
+        "risk": "这是整个请求生命周期的中枢，四个阶段都在这里串联，改动影响面最大。"
+      }
+    },
+    "httpx/_client.py::Client._send_handling_auth()": {
+      "role": "按 auth 流逐步调用请求，处理 401 挑战（Digest 需要两轮）。",
+      "insight": {
+        "why": "Digest 认证必须「先被拒一次才能算出正确的 header」，所以这里做成了生成器。"
+      }
+    },
+    "httpx/_client.py::Client._send_handling_redirects()": {
+      "role": "循环跟随 3xx，处理 303 改 GET、跨域丢 header、最大跳数限制。",
+      "insight": {
+        "risk": "重定向与认证的组合是历史 bug 高发区。"
+      }
+    }
+  },
+  "flows": [
+    {
+      "id": "fl_get",
+      "title": "httpx.get() 的完整生命周期",
+      "steps": [
+        { "view": "v_file_httpx_api_py", "node": "fn:httpx/_api.py::get()", "note": "用户入口：建临时 Client" },
+        { "view": "v_file_httpx_api_py", "node": "fn:httpx/_api.py::request()", "note": "统一收口，转发给 client.request" },
+        { "view": "v_file_httpx_client_py", "node": "fn:httpx/_client.py::Client.request()", "note": "组装 Request，进入 send" },
+        { "view": "v_file_httpx_client_py", "node": "fn:httpx/_client.py::Client.send()", "note": "认证 → 重定向 → 发出" },
+        { "view": "v_grp_transport", "node": "file:httpx/_transports/default.py", "note": "交给 HTTPTransport，落到 httpcore" },
+        { "view": "v_file_httpx_models_py", "node": "fn:httpx/_models.py::Response.read()", "note": "回来后按需解码 body" }
+      ]
+    },
+    {
+      "id": "fl_redirect",
+      "title": "一次 302 重定向是怎么处理的",
+      "steps": [
+        { "view": "v_file_httpx_client_py", "node": "fn:httpx/_client.py::Client.send()", "note": "入口" },
+        { "view": "v_file_httpx_client_py", "node": "fn:httpx/_client.py::Client._send_handling_redirects()", "note": "看到 3xx，进入重定向循环" },
+        { "view": "v_file_httpx_client_py", "node": "fn:httpx/_client.py::Client._build_redirect_request()", "note": "构造下一跳：方法改写、header 裁剪" },
+        { "view": "v_grp_transport", "node": "file:httpx/_transports/default.py", "note": "重新发一次" }
+      ]
+    }
+  ]
+}

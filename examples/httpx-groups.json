@@ -1,0 +1,44 @@
+{
+  "layers": [
+    {
+      "key": "entry",
+      "name": "公开入口",
+      "match": ["httpx/__init__.py", "httpx/_api.py", "httpx/_main.py"],
+      "role": "对外暴露的模块级函数与命令行入口。全是薄封装：建一个临时 Client、把参数透传下去、返回 Response。"
+    },
+    {
+      "key": "client",
+      "name": "客户端编排",
+      "match": ["httpx/_client.py", "httpx/_auth.py", "httpx/_config.py", "httpx/_types.py"],
+      "role": "请求的编排中枢：拼装 Request、处理认证与重定向、管理连接池生命周期，最后把控制权交给 transport。"
+    },
+    {
+      "key": "model",
+      "name": "数据模型",
+      "match": [
+        "httpx/_models.py",
+        "httpx/_urls.py",
+        "httpx/_urlparse.py",
+        "httpx/_content.py",
+        "httpx/_decoders.py",
+        "httpx/_multipart.py",
+        "httpx/_exceptions.py",
+        "httpx/_status_codes.py"
+      ],
+      "role": "Request / Response / Headers / URL 等值对象，外加请求体编码、响应解码与异常体系。这一层不发起 IO。"
+    },
+    {
+      "key": "transport",
+      "name": "传输层",
+      "match": ["httpx/_transports/**"],
+      "role": "把 Request 真正发出去的适配器：HTTP/1.1、HTTP/2、ASGI、WSGI、Mock 五种实现，共用 base 抽象类。"
+    },
+    {
+      "key": "infra",
+      "name": "基础设施",
+      "match": ["httpx/_utils.py", "httpx/__version__.py"],
+      "role": "编码、URL 解析、header 大小写归一这类无状态工具函数，被各层共用。"
+    }
+  ],
+  "skip": ["tests", "docs", "scripts"]
+}

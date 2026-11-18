@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-atlas.dev/schemas/model.schema.json",
+  "title": "model.json",
+  "description": "构建产物：抽取层与渲染层之间的唯一契约。由 build 生成，viewer 消费。",
+  "type": "object",
+  "required": ["meta", "stats", "rootView", "views"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["project", "warnings"],
+      "properties": {
+        "project": { "type": "string" },
+        "generatedAt": { "type": "string" },
+        "extractor": {
+          "type": "object",
+          "properties": { "name": { "type": "string" }, "version": { "type": "string" }, "mode": { "type": "string" } }
+        },
+        "techstack": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" }, "ver": { "type": "string" }, "from": { "type": "string" }, "kind": { "type": "string" } }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "nodes": { "type": "integer" }, "edges": { "type": "integer" },
+        "files": { "type": "integer" }, "functions": { "type": "integer" },
+        "extracted": { "type": "integer" }, "inferred": { "type": "integer" }
+      }
+    },
+    "intro": {
+      "type": "object",
+      "properties": { "paragraphs": { "type": "array", "items": { "type": "string" } }, "basis": { "type": "array", "items": { "type": "string" } } }
+    },
+    "startHere": {
+      "type": "array",
+      "items": { "type": "object", "required": ["view", "node"], "properties": { "view": { "type": "string" }, "node": { "type": "string" }, "label": { "type": "string" }, "why": { "type": "string" } } }
+    },
+    "rootView": { "type": "string" },
+    "views": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/view" }
+    },
+    "flows": {
+      "type": "array",
+      "items": { "type": "object", "required": ["id", "title", "view"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "view": { "type": "string" }, "note": { "type": "string" }, "steps": { "type": "integer" } } }
+    },
+    "types": { "type": ["object", "null"] }
+  },
+  "$defs": {
+    "view": {
+      "type": "object",
+      "required": ["id", "kind", "nodes", "edges"],
+      "properties": {
+        "id": { "type": "string" },
+        "level": { "type": "integer" },
+        "kind": { "type": "string", "enum": ["layers", "modules", "files", "classes", "functions", "flow"] },
+        "title": { "type": "string" },
+        "breadcrumb": { "type": "array", "items": { "type": "string" } },
+        "note": { "type": "string" },
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+        "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "label", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "type": "string" },
+        "sub": { "type": "string" },
+        "metrics": { "type": "string" },
+        "subLines": { "type": "array", "items": { "type": "string" } },
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "w": { "type": "number" }, "h": { "type": "number" },
+        "drill": { "type": "string" },
+        "xref": { "type": "string" },
+        "summary": { "type": "string" },
+        "insight": { "type": "object" },
+        "link": { "type": "object" },
+        "badge": { "type": "string" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string" }, "to": { "type": "string" },
+        "kind": { "type": "string" }, "label": { "type": "string" },
+        "weight": { "type": "number" },
+        "confidence": { "type": "string", "enum": ["EXTRACTED", "INFERRED", "MIXED"] }
+      }
+    }
+  }
+}
