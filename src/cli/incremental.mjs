@@ -104,7 +104,7 @@ export function codeFingerprint(repo) {
 /** 输入指纹：这些文件任一变化，产物就必须重建 */
 export function inputFingerprint(files) {
   const h = crypto.createHash('sha256');
-  for (const f of files) {
+  for (const f of files.filter(Boolean)) {
     h.update(path.basename(f) + '\0');
     try { h.update(fs.readFileSync(f)); } catch { h.update('<missing>'); }
   }

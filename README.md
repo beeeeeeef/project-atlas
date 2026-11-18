@@ -114,7 +114,7 @@ src/render 相关        assets/viewer/ 下的 vanilla 渲染器
 assets/vendor/       dagre（构建期布局，MIT）
 schemas/             groups / insights / model 的 JSON Schema
 tests/               单元测试 + 夹具 + 端到端冒烟
-docs/                架构说明、数据契约、贡献指南
+docs/                架构说明、开发日志、数据契约、贡献指南
 SKILL.md             agent 入口
 ```
 
@@ -131,10 +131,24 @@ SKILL.md             agent 入口
 - [x] 四页签（概览 / 架构 / 流程 / 数据）
 - [x] 质量门与可脚本化验证
 - [x] 六种语言的类型声明解析
-- [ ] 增量更新（按 commit 比对，跳过重复抽图）
+- [x] 增量更新（三层指纹：代码 / 输入 / 资产；无变化 0.11s）
 - [ ] 调用链追踪（函数到入口的完整路径）
 - [ ] 变更影响分析（改这个符号会波及什么）
 - [ ] 多仓库地图（跨仓 API 契约）
+
+## 开发过程与量化数据
+
+所有重要取舍、被否掉的方案、以及可复现的耗时数字都在 [docs/devlog.md](docs/devlog.md)：
+
+| 指标 | 数值 |
+|---|---|
+| 首次全量（Algo-coach，136 文件） | 4.29 s |
+| 无变化再跑 | 0.11 s |
+| 只改 insights | 0.42 s |
+| 改一处代码 | 1.58 s |
+| 产物大小 | 175 KB |
+
+复现：`node tests/bench.mjs --repo <仓库> --groups … --insights …`
 
 ## License
 
