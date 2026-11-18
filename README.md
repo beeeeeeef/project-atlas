@@ -77,6 +77,27 @@ node bin/atlas.mjs run \
 - 无外部字体、无 CDN、无网络请求
 - 典型体积 100–250 KB
 
+## 产物与中间文件
+
+**不会写进被分析的仓库。** 所有中间产物都在当前目录的 `.atlas/`：
+
+```
+.atlas/
+├── graph.json       抽出来的代码图（复用：存在就跳过抽图）
+├── proposal.json    给 agent 的决策输入
+├── cache/           graphify 的 AST 缓存
+└── manifest.json
+架构图.html          最终产物（--out 指定，默认当前目录 atlas.html）
+```
+
+| 想改什么 | 用什么 |
+|---|---|
+| 中间文件位置 | `--workdir <目录>` |
+| 产物位置 | `--out <文件>` |
+| 复用已有 graph.json | `--graph <文件>` |
+
+想重新抽图就删掉 `.atlas/graph.json`。`.atlas/` 已写进 `.gitignore`。
+
 ## 仓库结构
 
 ```

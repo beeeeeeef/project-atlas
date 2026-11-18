@@ -75,29 +75,47 @@ if (cmd === 'verify') {
 // ---------- run ----------
 const TOTAL = 5;
 const out = args.out && args.out !== true ? args.out : path.join(process.cwd(), 'atlas.html');
+
+// 中间产物统一放在 workdir（默认 <cwd>/.atlas），不写进被分析的仓库
+const workdir = args.workdir && args.workdir !== true
+  ? path.resolve(args.workdir)
+  : path.join(process.cwd(), '.atlas');
+fs.mkdirSync(workdir, { recursive: true });
+
 const graphPath = args.graph && args.graph !== true
   ? path.resolve(args.graph)
-  : path.join(repo, 'graphify-out', 'graph.json');
+  : path.join(workdir, 'graph.json');
 
 // 1. 抽图
 step(1, TOTAL, '抽取代码图');
 if (fs.existsSync(graphPath)) {
   console.log(`  已有 ${path.relative(process.cwd(), graphPath)}（复用；要重抽就删掉它）`);
 } else {
-  console.log(`  运行 graphify extract（目标 ${repo}）…`);
-  const r = spawnSync('graphify', ['extract', '.', '--code-only'], { cwd: repo, stdio: 'inherit' });
-  if (r.status !== 0 || !fs.existsSync(graphPath)) {
-    console.error('\n  ✗ 抽图失败。两条路：');
-    console.error('    a) 装好 graphify 后重跑：uv tool install graphifyy');
-    console.error('    b) 走降级：node src/extract/scan.mjs --repo <仓库> --out <tmp>/graph.json');
-    console.error('       然后重跑本命令并加 --graph <tmp>/graph.json（页面会标注函数级调用未解析）');
-    process.exit(2);
+  console.log(`  运行 graphify extract（目标 ${repo}，产物写到 ${workdir}）…`);
+  const r = spawnSync('graphify', ['extract', '.', '--code-only'], {
+    cwd: repo,
+    stdio: 'inherit',
+    env: { ...process.env, GRAPHIFY_OUT: workdir },   // 不污染目标仓库
+  });
+
+  if (r.error || r.status !== 0 || !fs.existsSync(graphPath)) {
+    if (r.error && r.error.code === 'ENOENT') {
+      console.log('  未安装 graphify，改用降级扫描（没有函数级调用边）…');
+      const scan = spawnSync(process.execPath, [path.join(here, '..', 'extract', 'scan.mjs'), '--repo', repo, '--out', graphPath], { stdio: 'inherit' });
+      if (scan.status !== 0) process.exit(2);
+    } else {
+      console.error('\n  ✗ 抽图失败。两条路：');
+      console.error('    a) 装好 graphify 后重跑：uv tool install graphifyy');
+      console.error('    b) 走降级：node src/extract/scan.mjs --repo <仓库> --out ' + graphPath);
+      console.error('       然后重跑本命令并加 --graph ' + graphPath + '（页面会标注函数级调用未解析）');
+      process.exit(2);
+    }
   }
 }
 
 // 2. 出提案
 step(2, TOTAL, '生成提案（proposal.json）');
-const proposal = path.join(process.cwd(), 'proposal.json');
+const proposal = path.join(workdir, 'proposal.json');
 if (node(CLI('build.mjs'), ['propose', '--repo', repo, '--graph', graphPath, '--out', proposal]) !== 0) process.exit(3);
 console.log('\n  ⚠ 下一步需要你（模型）读 proposal.json + README/入口文件，写两份输入：');
 console.log('    groups.json   —— 分层：哪些文件属于哪层、层叫什么、一句话职责');
