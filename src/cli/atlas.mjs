@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readState, writeState, codeFingerprint, inputFingerprint, engineFiles, decide } from './incremental.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = (f) => path.join(here, f);
@@ -111,18 +112,34 @@ const graphPath = args.graph && args.graph !== true
   ? path.resolve(args.graph)
   : path.join(workdir, 'graph.json');
 
+// ---- 增量决策 ----
+const groupsPath = args.groups && args.groups !== true ? path.resolve(args.groups) : null;
+const insightsPath = args.insights && args.insights !== true ? path.resolve(args.insights) : null;
+const statePath = path.join(workdir, 'state.json');
+const prevState = readState(statePath);
+const code = codeFingerprint(repo);
+const inputsFp = inputFingerprint([groupsPath, insightsPath, ...engineFiles(path.join(here, '..', '..'))]);
+const plan = decide({
+  graphPath, statePath, state: prevState,
+  codeFp: code.fp, inputsFp, out, force: !!args.fresh,
+});
+
+if (plan.action === 'reuse-all') {
+  console.log(`\n\x1b[32m无变化\x1b[0m  复用已有产物: ${out}`);
+  console.log('（代码与输入都没变；要强制重来加 --fresh）');
+  process.exit(0);
+}
+
 // 1. 抽图
 step(1, TOTAL, '抽取代码图');
-if (fs.existsSync(graphPath)) {
-  console.log(`  已有 ${path.relative(process.cwd(), graphPath)}（复用；要重抽就删掉它）`);
-} else {
+
+function runExtract() {
   console.log(`  运行 graphify extract（目标 ${repo}，产物写到 ${workdir}）…`);
   const r = spawnSync('graphify', ['extract', '.', '--code-only'], {
     cwd: repo,
     stdio: 'inherit',
-    env: { ...process.env, GRAPHIFY_OUT: workdir },   // 不污染目标仓库
+    env: { ...process.env, GRAPHIFY_OUT: workdir },
   });
-
   if (r.error || r.status !== 0 || !fs.existsSync(graphPath)) {
     if (r.error && r.error.code === 'ENOENT') {
       console.log('  未安装 graphify，改用降级扫描（没有函数级调用边）…');
@@ -132,10 +149,31 @@ if (fs.existsSync(graphPath)) {
       console.error('\n  ✗ 抽图失败。两条路：');
       console.error('    a) 装好 graphify 后重跑：uv tool install graphifyy');
       console.error('    b) 走降级：node src/extract/scan.mjs --repo <仓库> --out ' + graphPath);
-      console.error('       然后重跑本命令并加 --graph ' + graphPath + '（页面会标注函数级调用未解析）');
       process.exit(2);
     }
   }
+}
+
+function runUpdate() {
+  console.log(`  增量更新（${plan.why}）…`);
+  const r = spawnSync('graphify', ['update', '.'], {
+    cwd: repo,
+    stdio: 'inherit',
+    env: { ...process.env, GRAPHIFY_OUT: workdir },
+  });
+  if (r.error || r.status !== 0 || !fs.existsSync(graphPath)) {
+    console.log('  增量更新不可用，回退全量抽取…');
+    runExtract();
+  }
+}
+
+if (plan.action === 'build-only') {
+  console.log(`  跳过抽图：${plan.why}`);
+} else if (plan.action === 'update') {
+  runUpdate();
+} else {
+  console.log(`  ${plan.why}`);
+  runExtract();
 }
 
 // 2. 出提案
@@ -149,8 +187,8 @@ console.log('    格式见 schemas/*.schema.json 与 SKILL.md §4');
 
 // 3. 检查输入
 step(3, TOTAL, '检查模型输入');
-const groups = args.groups && args.groups !== true ? path.resolve(args.groups) : null;
-const insights = args.insights && args.insights !== true ? path.resolve(args.insights) : null;
+const groups = groupsPath;
+const insights = insightsPath;
 if (!groups || !fs.existsSync(groups)) {
   console.error('  ✗ 缺 groups.json。没有它，构建会拒绝执行——分层必须由你判断，不能交给启发式。');
   console.error('    写好后重跑：node src/cli/atlas.mjs run --repo <仓库> --groups <g.json> --insights <i.json>');
@@ -179,6 +217,13 @@ step(5, TOTAL, '验证产物');
 const va = ['--file', out];
 if (args.browser && args.browser !== true) va.push('--browser', args.browser);
 if (node(CLI('verify.mjs'), va) !== 0) process.exit(6);
+
+writeState(statePath, {
+  v: 1,
+  repo,
+  graph: { codeFp: code.fp, commit: code.commit, dirty: code.dirty, at: new Date().toISOString() },
+  build: { inputsFp, out, at: new Date().toISOString() },
+});
 
 console.log('\n\x1b[32m完成\x1b[0m  产物: ' + out);
 if (inRepo) {
