@@ -8,3 +8,6 @@ model.json
 dist/
 .DS_Store
 Thumbs.db
+
+# 个人开发日志（只留本地，不公开）
+devlog.md
