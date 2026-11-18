@@ -49,12 +49,15 @@ git clone https://github.com/beeeeeeef/project-atlas.git ~/.dsh/skills/project-a
 node bin/atlas.mjs doctor                 # 环境自检
 node bin/atlas.mjs run \
   --repo /path/to/repo \
-  --groups examples/httpx-groups.json \
-  --insights examples/httpx-insights.json \
+  --groups ./my-groups.json \
+  --insights ./my-insights.json \
   --out atlas.html
 ```
 
 `run` 五步串行：环境 → 抽图 → 提案 → 检查输入 → 构建 → 验证。任一步不过就停，并告诉你下一步做什么。
+
+> `--groups` / `--insights` 是 **agent 读代码后生成的产物，不是给人手写的**。
+> 人的输入只有仓库路径；这两份文件的存在是为了让 agent 的判断可校验、可复现、可 diff。
 
 ## 依赖
 
@@ -85,7 +88,6 @@ src/types/           数据结构抽取（Go/TS/Python/Java/Rust/SQL）
 src/render 相关        assets/viewer/ 下的 vanilla 渲染器
 assets/vendor/       dagre（构建期布局，MIT）
 schemas/             groups / insights / model 的 JSON Schema
-examples/            真实项目的输入样例
 tests/               单元测试 + 夹具 + 端到端冒烟
 docs/                架构说明、数据契约、贡献指南
 SKILL.md             agent 入口

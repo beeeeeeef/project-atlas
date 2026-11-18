@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { buildModel, makeProposal } from '../model/adapt.mjs';
 import { layoutModel } from '../model/layout.mjs';
 import { checkModel } from '../model/check.mjs';
+import { validate } from '../model/validate.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const A = (p) => path.join(here, '..', '..', p);
@@ -44,6 +45,29 @@ function readJson(p, label) {
   } catch (e) {
     die(`${label} 不是合法 JSON: ${p}\n${e.message}`);
   }
+}
+
+/** 读 JSON + 按 schemas/ 校验；不合法直接停，并报出字段路径 */
+function readValidated(p, label, schemaName) {
+  const data = readJson(p, label);
+  if (!data) return null;
+  const schemaPath = A(`schemas/${schemaName}`);
+  if (!fs.existsSync(schemaPath)) return data; // 没有 schema 时退回只解析
+  let schema;
+  try {
+    schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+  } catch (e) {
+    console.warn(`[build] schemas/${schemaName} 读不了，跳过校验：${e.message}`);
+    return data;
+  }
+  const { errors } = validate(data, schema);
+  if (errors.length) {
+    console.error(`[build] ${label} 不符合 schemas/${schemaName}：`);
+    for (const e of errors.slice(0, 12)) console.error(`  ✗ ${e.path}  ${e.message}`);
+    if (errors.length > 12) console.error(`  … 还有 ${errors.length - 12} 处`);
+    die(`${label} 校验失败。修好字段后重跑（格式见 schemas/${schemaName} 与 SKILL.md §4）。`);
+  }
+  return data;
 }
 
 function resolveGraph(args) {
@@ -122,13 +146,13 @@ async function cmdBuild(args) {
   const graphPath = resolveGraph(args);
   const graph = readJson(graphPath, 'graph.json');
   const repo = args.repo && args.repo !== true ? args.repo : '.';
-  const groups = readJson(args.groups, 'groups.json');
-  const insights = readJson(args.insights, 'insights.json');
+  const groups = readValidated(args.groups, 'groups.json', 'groups.schema.json');
+  const insights = readValidated(args.insights, 'insights.json', 'insights.schema.json');
   if (!groups && !args['auto-groups']) {
     die(
       '缺少 groups.json：分层必须由你（模型）根据 propose 的输出写，不能交给启发式。\n' +
       '  先跑：node src/cli/build.mjs propose --repo <仓库> --out proposal.json\n' +
-      '  再照 examples/ 里的格式写 groups.json，然后用 --groups 指过来。\n' +
+      '  格式见 schemas/groups.schema.json（或 SKILL.md 的 §4），写好后用 --groups 指过来。\n' +
       '  （确实只想看机器分层，加 --auto-groups，产物会带警告。）'
     );
   }
@@ -136,7 +160,7 @@ async function cmdBuild(args) {
   if (!insights && !args['no-insights']) {
     die(
       '缺少 insights.json：概览介绍、卡片职责、关键链路都来自它，没有它四页签是三张空图。\n' +
-      '  照 examples/*-insights.json 的格式写，然后用 --insights 指过来；\n' +
+      '  格式见 schemas/insights.schema.json（或 SKILL.md 的 §4），写好后用 --insights 指过来；\n' +
       '  （明确只做骨架图，加 --no-insights。）'
     );
   }

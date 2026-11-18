@@ -102,7 +102,7 @@ if (node(CLI('build.mjs'), ['propose', '--repo', repo, '--graph', graphPath, '--
 console.log('\n  ⚠ 下一步需要你（模型）读 proposal.json + README/入口文件，写两份输入：');
 console.log('    groups.json   —— 分层：哪些文件属于哪层、层叫什么、一句话职责');
 console.log('    insights.json —— 概览介绍 / 卡片职责 / 关键链路');
-console.log('    格式见 examples/*-groups.json 与 examples/*-insights.json');
+console.log('    格式见 schemas/*.schema.json 与 SKILL.md §4');
 
 // 3. 检查输入
 step(3, TOTAL, '检查模型输入');
