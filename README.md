@@ -37,7 +37,7 @@ agent：抽图 → 出提案 → 写分层与解释 → 构建 → 验证
 ### 方式一：作为 agent skill
 
 ```bash
-git clone https://github.com/USER/project-atlas.git ~/.dsh/skills/project-atlas
+git clone https://github.com/beeeeeeef/project-atlas.git ~/.dsh/skills/project-atlas
 # Claude Code: ~/.claude/skills/project-atlas
 ```
 
