@@ -925,7 +925,13 @@
       setTimeout(function () { st.suppressEmptyClick = false; }, 0);
       return;
     }
-    if (nodeId) activateNode(nodeId);
+    if (nodeId) {
+      /* pointerup 的 target 可能已经是 <svg>（卡片文字 pointer-events:none），
+         随后的 click 会被判成"点空白"。这里标记一次，让 click 跳过关闭逻辑。 */
+      st.suppressEmptyClick = true;
+      setTimeout(function () { st.suppressEmptyClick = false; }, 0);
+      activateNode(nodeId);
+    }
   }
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', function (e) {

@@ -16,6 +16,16 @@ node tests/e2e/smoke.mjs         # 端到端冒烟（不需要 graphify）
 - 改了渲染器 → 用真实项目出一版图并截图对比（`docs/assets/`）
 - 改了 `model.json` 结构 → 同步 `schemas/model.schema.json` 与 `docs/model-schema.md`
 
+## 交互必须用真实鼠标验证
+
+**合成事件不等于真实交互。** 曾经踩过：只发 `pointerdown` + `pointerup` 时面板能打开，
+但真实点击会依次产生 `pointerdown → pointerup → click`，第三步把刚打开的面板关掉了。
+
+所以凡涉及点击 / 拖拽 / 悬停的改动，交付前必须：
+
+- 用 Playwright 的 `browser_click`（真实鼠标）走一遍主路径，不要只 `dispatchEvent`
+- 至少覆盖：层 → 文件 → 函数的下钻、点开详情面板、切页签来回切两次
+
 ## 代码约定
 
 - **零运行时依赖**是硬约束：新增 JS 依赖前先讨论。构建期依赖（如 dagre）必须 vendored 进 `assets/vendor/` 并在 package.json 的 files 里。
