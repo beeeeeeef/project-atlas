@@ -5,6 +5,25 @@
   'use strict';
 
   var M = window.__ARCH__ || {};
+
+  /* ---------- 调用链索引 ----------
+     整张函数级调用图随产物一起发下来（构建期编码，几 KB 到几十 KB），
+     这里只建正反两张邻接表。遍历时按需展开，所以深度和分支都不做截断。 */
+  var CALLS = (function () {
+    var c = M.calls;
+    if (!c || !c.pool || !c.edges) return null;
+    var pool = c.pool, up = {}, down = {}, byId = {};
+    pool.forEach(function (p, i) {
+      var id = 'fn:' + p[1] + '::' + p[0];
+      byId[id] = i;
+    });
+    c.edges.forEach(function (e) {
+      var a = e[0], b = e[1], conf = e[2];
+      (down[a] = down[a] || []).push([b, conf]);
+      (up[b] = up[b] || []).push([a, conf]);
+    });
+    return { pool: pool, up: up, down: down, byId: byId };
+  })();
   var VIEWS = M.views || {};
   var FLOWS = M.flows || [];
   var INTRO = M.intro || {};
@@ -113,7 +132,8 @@
     expanded: {},       /* 数据页：typeId -> true（字段全展开） */
     stack: [],          /* 返回栈：{tab, view, node} */
     flow: null,
-    type: null
+    type: null,
+    callOpen: {}       /* 调用链展开状态：dir:idx -> true */
   };
 
   var nodeEls = {};      /* id -> <g> */
@@ -368,7 +388,8 @@
     var badgeTxt = drill ? ('▸ ' + count) : '';
     if (drill) badgeW = measure(badgeTxt, F_BADGE) + 14;
 
-    var padL = 13 + (n.badge ? 24 : 0), padR = 14 + (drill ? badgeW + 10 : 0);
+    var hasCall = ((n.callUp || 0) + (n.callDown || 0)) > 0;
+    var padL = 13 + (n.badge ? 24 : 0), padR = 14 + (drill ? badgeW + 10 : 0) + (hasCall ? 46 : 0);
     var maxLabel = w - padL - padR;
 
     var lineH = 15;
@@ -397,6 +418,17 @@
       svgEl('rect', { 'class': 'badge-bg', x: bx.toFixed(1), y: by.toFixed(1), width: bw.toFixed(1), height: 18, rx: 9 }, inner);
       var bt = svgEl('text', { 'class': 'badge-tx', x: (bx + bw / 2).toFixed(1), y: (by + 12.6).toFixed(1), 'text-anchor': 'middle' }, inner);
       bt.textContent = badgeTxt;
+    }
+
+    /* 调用链徽标：有上下游的函数卡片标 ⇅N，让"这张卡能看链"一眼可见 */
+    var callN = (n.callUp || 0) + (n.callDown || 0);
+    if (callN > 0) {
+      var ctxt = '⇅ ' + callN;
+      var cw = measure(ctxt, F_BADGE) + 16;
+      var cx = w - cw - 8, cy = 7;
+      svgEl('rect', { 'class': 'call-badge-bg', x: cx.toFixed(1), y: cy.toFixed(1), width: cw.toFixed(1), height: 18, rx: 9 }, inner);
+      var ct = svgEl('text', { 'class': 'call-badge-tx', x: (cx + cw / 2).toFixed(1), y: (cy + 12.6).toFixed(1), 'text-anchor': 'middle' }, inner);
+      ct.textContent = ctxt;
     }
 
     if (n.badge) {
@@ -471,6 +503,71 @@
     return hit ? hit.node.label : id;
   }
 
+  /* ---------- 调用链 ---------- */
+  // 展开状态：dir + 节点索引 + 祖先链（防止环无限展开）
+  function callKey(dir, idx) { return dir + ':' + idx; }
+
+  function callStep(idx) {
+    var p = CALLS.pool[idx] || ['?', '', ''];
+    var id = 'fn:' + p[1] + '::' + p[0];
+    var canJump = !!nodeEls[id] || !!findNodeAnywhere(id);
+    return { id: id, label: p[0], file: p[1], line: p[2], canJump: canJump };
+  }
+
+  function callRows(dir, idx, ancestors, depth) {
+    if (depth > 40) return '';
+    var list = (dir === 'up' ? CALLS.up : CALLS.down)[idx] || [];
+    if (!list.length) return '';
+    var html = '<div class="cl-list">';
+    list.forEach(function (pair) {
+      var ci = pair[0], conf = pair[1];
+      var stp = callStep(ci);
+      var loop = ancestors.indexOf(ci) >= 0;
+      var hasMore = ((dir === 'up' ? CALLS.up : CALLS.down)[ci] || []).length > 0 && !loop;
+      var open = st.callOpen[callKey(dir, ci)] === true;
+      var confTag = conf === 1 ? '' : ' <span class="inf">推断</span>';
+      html += '<div class="cl-node' + (loop ? ' cl-loop' : '') + '">' +
+        '<div class="cl-row">' +
+        (hasMore
+          ? '<button class="cl-tog" data-cl-tog="' + dir + ':' + ci + '" aria-label="展开">' + (open ? '▾' : '▸') + '</button>'
+          : '<span class="cl-tog cl-leaf"></span>') +
+        (stp.canJump
+          ? '<button class="cl-name clickable" data-goto="' + esc(stp.id) + '">' + esc(stp.label) + '</button>'
+          : '<span class="cl-name">' + esc(stp.label) + '</span>') +
+        confTag +
+        (loop ? '<span class="cl-note">↺ 已在上文</span>' : '') +
+        '</div>' +
+        '<div class="cl-meta">' + esc(stp.file) + (stp.line ? ':' + stp.line : '') + '</div>';
+      if (open && hasMore) {
+        html += callRows(dir, ci, ancestors.concat([ci]), depth + 1);
+      }
+      html += '</div>';
+    });
+    return html + '</div>';
+  }
+
+  function callSection(n) {
+    if (!CALLS) return '';
+    var idx = CALLS.byId[n.id];
+    if (idx === undefined) return '';
+    var ups = CALLS.up[idx] || [], downs = CALLS.down[idx] || [];
+    if (!ups.length && !downs.length) {
+      return '<div class="p-sec"><h3>调用链</h3>' +
+        '<div class="none">未被任何函数调用，也不调用其他函数（独立函数，通常是入口或工具函数）。</div></div>';
+    }
+    var out = '<div class="p-sec"><h3>调用链</h3>';
+    out += '<div class="cl-legend">上游 = 谁把它叫起来，一路到根；下游 = 它最终会走到哪。点 ▸ 可继续展开，不限深度。</div>';
+    if (ups.length) {
+      out += '<div class="cl-block"><div class="cl-h">上游 · ' + ups.length + ' 个直接调用者</div>' +
+        callRows('up', idx, [idx], 0) + '</div>';
+    }
+    if (downs.length) {
+      out += '<div class="cl-block"><div class="cl-h">下游 · ' + downs.length + ' 个直接被调用的函数</div>' +
+        callRows('down', idx, [idx], 0) + '</div>';
+    }
+    return out + '</div>';
+  }
+
   function panelHTML(n) {
     var ins = n.insight || {};
     var hasIns = !!(ins.role || ins.risk || ins.why);
@@ -515,6 +612,7 @@
       if (e.to === n.id) ins2.push({ other: e.from, kind: e.kind, label: e.label, confidence: e.confidence, dir: 'in' });
       if (e.from === n.id) outs.push({ other: e.to, kind: e.kind, label: e.label, confidence: e.confidence, dir: 'out' });
     });
+    out.push(callSection(n));
     out.push('<div class="p-sec"><h3>入边 · ' + ins2.length + '</h3>' + relRows(ins2, '入边') + '</div>');
     out.push('<div class="p-sec"><h3>出边 · ' + outs.length + '</h3>' + relRows(outs, '出边') + '</div>');
 
@@ -897,11 +995,27 @@
     var copyBtn = t.closest && t.closest('[data-copy]');
     if (copyBtn) { copyText(copyBtn.getAttribute('data-copy'), copyBtn); return; }
 
+    var clTog = t.closest && t.closest('[data-cl-tog]');
+    if (clTog) {
+      var k = clTog.getAttribute('data-cl-tog');
+      st.callOpen[k] = st.callOpen[k] !== true;
+      var cur = curView() && st.sel ? findNodeAnywhere(st.sel) : null;
+      if (cur) {
+        var keepScroll = panel.scrollTop;
+        panel.innerHTML = panelHTML(cur.node);
+        panel.scrollTop = keepScroll;
+      }
+      return;
+    }
+
     var gotoBtn = t.closest && t.closest('[data-goto]');
     if (gotoBtn) {
       var gid = gotoBtn.getAttribute('data-goto');
       var gg = nodeEls[gid];
-      if (gg && gg.__node) openPanel(gg.__node);
+      if (gg && gg.__node) { openPanel(gg.__node); return; }
+      var hit = findNodeAnywhere(gid);      /* 调用链上可能不在当前屏：跳过去 */
+      if (hit && hit.viewId !== st.cur) nav(hit.viewId);
+      if (hit) openPanel(hit.node);
       return;
     }
 
@@ -1089,8 +1203,12 @@
     if (isData) renderData();
     if (isFlow) {
       renderFlowPicker();
-      if (st.flow && VIEWS[st.flow.view]) { /* 保持当前链路 */ }
-      else if (FLOWS.length) gotoFlow(FLOWS[0].id, true);
+      if (st.flow && VIEWS[st.flow.view]) {
+        /* 保持当前链路：必须重画，否则舞台里还留着上一次的架构视图 */
+        gotoFlow(st.flow.id, true);
+      } else if (FLOWS.length) {
+        gotoFlow(FLOWS[0].id, true);
+      }
     }
     if (isArch) {
       if (!st.cur || VIEWS[st.cur] && VIEWS[st.cur].kind === 'flow') st.cur = M.rootView || st.cur;

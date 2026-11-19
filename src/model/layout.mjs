@@ -83,6 +83,7 @@ function sizeFor(node, kindOfView) {
   let width = Math.round(maxLineU * UNIT_PX + 42);
   width = Math.max(width, isFlow ? 190 : 220);
   width += node.drill ? 52 : 0;          // 给右上角角标留位
+  if (node.callUp || node.callDown) width += 46;   // 调用链徽标 ⇅ N
   width = Math.min(width, isFlow ? 420 : 560);
 
   // +8：给字体下沉部（g/y/p 的下缘）留余量，避免最后一行的 descender 贴到边框

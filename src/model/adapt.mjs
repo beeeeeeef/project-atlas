@@ -132,6 +132,19 @@ export function buildModel(graph, opts = {}) {
     symIn.set(e.to, (symIn.get(e.to) || 0) + 1);
   }
 
+  // ---- 调用链度数：与产物里 calls 图同一数据源（原始 links），保证徽标与面板数字一致 ----
+  const callUpOf = new Map();
+  const callDownOf = new Map();
+  for (const l of links) {
+    if (!CALL_REL.has(l.relation)) continue;
+    if (l.source === l.target) continue;
+    const sn = byId.get(l.source), tn = byId.get(l.target);
+    if (!sn?.source_file || !tn?.source_file) continue;
+    if (classify(sn) === 'file' || classify(tn) === 'file') continue;
+    callDownOf.set(l.source, (callDownOf.get(l.source) || 0) + 1);
+    callUpOf.set(l.target, (callUpOf.get(l.target) || 0) + 1);
+  }
+
   // ---- 文件级边（函数边聚合 + import）----
   const fileAgg = new Map(); // "a→b" -> {from,to,calls,imports,weak}
   const bump = (from, to, field, conf) => {
@@ -340,6 +353,8 @@ export function buildModel(graph, opts = {}) {
           metrics: `${locShort(n.source_location) || '—'} · 度 ${symDeg.get(id) || 0}`,
           w: 230, h: 74,
           xref: `${f.path}:${locNum(n.source_location)}`,
+          callUp: callUpOf.get(id) || 0,
+          callDown: callDownOf.get(id) || 0,
         };
         applyFnInsight(nn, f.path, dispLabel(n));
         if (!nn.sub) {
@@ -490,6 +505,40 @@ export function buildModel(graph, opts = {}) {
     }
   }
 
+  // ---- 调用链：整张函数级调用图装进产物，渲染期自己遍历（不限深度、不截断）----
+  // 池里存 [label, file, line]，id 按 `fn:<file>::<label>` 还原 —— 与视图节点 id 同一套规则，
+  // 所以链上的每一步只要在某屏出现过，就能直接跳过去。
+  const callPool = [];
+  const callIdx = new Map();
+  const callEdges = [];
+  const poolOf = (gid) => {
+    const n = byId.get(gid);
+    if (!n || !n.source_file) return -1;
+    if (classify(n) === 'file') return -1;
+    // 有些真函数 graphify 没标 _callable（如未解析的 .Chat()），但它们确实是调用目标。
+    // 调用链需要连续性，所以这里不要求 isSymbol，只要求"像函数"。
+    const isSym = fnIdOf.has(gid);
+    const label = isSym ? dispLabel(n) : String(n.label || '').trim();
+    if (!label) return -1;
+    const mid = isSym ? fnIdOf.get(gid) : `fn:${n.source_file}::${label}`;
+    let i = callIdx.get(mid);
+    if (i !== undefined) return i;
+    i = callPool.length;
+    callIdx.set(mid, i);
+    callPool.push([label, n.source_file, locNum(n.source_location)]);
+    return i;
+  };
+  // 直接用原始 links 建图：fnEdges 为文件级聚合丢了非符号目标，
+  // 但调用链要求连续性——断在中间就等于链是假的。
+  for (const l of links) {
+    if (!CALL_REL.has(l.relation)) continue;
+    if (l.source === l.target) continue;      // 自环对调用链没有信息量
+    const a = poolOf(l.source), b = poolOf(l.target);
+    if (a < 0 || b < 0) continue;
+    callEdges.push([a, b, l.confidence === 'EXTRACTED' ? 1 : 0]);
+  }
+  const calls = callPool.length ? { pool: callPool, edges: callEdges } : null;
+
   const symbolCount = nodes.filter((n) => isSymbol(kindOf.get(n.id))).length;
   return {
     meta: {
@@ -514,6 +563,7 @@ export function buildModel(graph, opts = {}) {
     startHere,
     techstack: opts.techstack || [],
     types: opts.types || null,
+    calls,
   };
 }
 
